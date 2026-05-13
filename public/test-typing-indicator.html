@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Typing Indicator Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .user-section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .krishna { background-color: #e8f5e8; }
+        .sibbu { background-color: #e8f0ff; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .typing-indicator { color: #666; font-style: italic; margin: 10px 0; }
+        .status { background: #f0f0f0; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Typing Indicator Test</h1>
+        <p>This demonstrates how the typing indicator works correctly:</p>
+
+        <div class="user-section krishna">
+            <h3>Krishna's View</h3>
+            <input type="text" id="krishna-input" placeholder="Type as Krishna...">
+            <div class="typing-indicator" id="krishna-sees-typing"></div>
+            <div class="status" id="krishna-status">Krishna is not typing</div>
+        </div>
+
+        <div class="user-section sibbu">
+            <h3>Sibbu's View</h3>
+            <input type="text" id="sibbu-input" placeholder="Type as Sibbu...">
+            <div class="typing-indicator" id="sibbu-sees-typing"></div>
+            <div class="status" id="sibbu-status">Sibbu is not typing</div>
+        </div>
+
+        <div class="status">
+            <h4>How it works:</h4>
+            <ul>
+                <li>When Krishna types, Sibbu sees "Krishna is typing..."</li>
+                <li>When Sibbu types, Krishna sees "Sibbu is typing..."</li>
+                <li>Users don't see their own typing indicator</li>
+                <li>Typing indicator disappears after 1 second of no typing</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Simulate the typing indicator logic from our chat app
+        let krishnaTimeout, sibbuTimeout;
+
+        document.getElementById('krishna-input').addEventListener('input', function(e) {
+            const value = e.target.value;
+
+            // Clear existing timeout
+            if (krishnaTimeout) clearTimeout(krishnaTimeout);
+
+            // Update Krishna's status
+            document.getElementById('krishna-status').textContent =
+                value.length > 0 ? 'Krishna is typing...' : 'Krishna is not typing';
+
+            // Show typing indicator to Sibbu (the other user)
+            if (value.length > 0) {
+                document.getElementById('sibbu-sees-typing').textContent = 'Krishna is typing...';
+
+                // Hide after 1 second of no typing
+                krishnaTimeout = setTimeout(() => {
+                    document.getElementById('sibbu-sees-typing').textContent = '';
+                    document.getElementById('krishna-status').textContent = 'Krishna is not typing';
+                }, 1000);
+            } else {
+                document.getElementById('sibbu-sees-typing').textContent = '';
+            }
+        });
+
+        document.getElementById('sibbu-input').addEventListener('input', function(e) {
+            const value = e.target.value;
+
+            // Clear existing timeout
+            if (sibbuTimeout) clearTimeout(sibbuTimeout);
+
+            // Update Sibbu's status
+            document.getElementById('sibbu-status').textContent =
+                value.length > 0 ? 'Sibbu is typing...' : 'Sibbu is not typing';
+
+            // Show typing indicator to Krishna (the other user)
+            if (value.length > 0) {
+                document.getElementById('krishna-sees-typing').textContent = 'Sibbu is typing...';
+
+                // Hide after 1 second of no typing
+                sibbuTimeout = setTimeout(() => {
+                    document.getElementById('krishna-sees-typing').textContent = '';
+                    document.getElementById('sibbu-status').textContent = 'Sibbu is not typing';
+                }, 1000);
+            } else {
+                document.getElementById('krishna-sees-typing').textContent = '';
+            }
+        });
+    </script>
+</body>
+</html>
