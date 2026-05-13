@@ -19,20 +19,27 @@ export function ChatDashboard({ activeConversationId }: { activeConversationId?:
 
   useEffect(() => {
     async function loadSingleConversation() {
-      if (!profile) return;
+      if (!profile) {
+        console.log("ChatDashboard: No profile yet, waiting...");
+        return;
+      }
 
+      console.log("ChatDashboard: Loading conversation for", profile.username);
       setLoading(true);
       setError(null);
 
       try {
         const response = await getSingleConversation();
+        console.log("ChatDashboard: Conversation loaded", response.conversation.id);
         setConversation(response.conversation);
         
         // Auto-redirect to the single conversation if not already there
         if (!activeConversationId || activeConversationId !== response.conversation.id) {
+          console.log("ChatDashboard: Redirecting to", response.conversation.id);
           router.replace(`/chat/${response.conversation.id}`);
         }
       } catch (caught) {
+        console.error("ChatDashboard: Failed to load conversation", caught);
         setError(caught instanceof ApiError ? caught.message : "Unable to load conversation");
       } finally {
         setLoading(false);

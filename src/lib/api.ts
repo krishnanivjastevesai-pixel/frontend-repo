@@ -70,13 +70,18 @@ async function apiRequest<T>(path: string, init: RequestInit = {}, cacheTtl?: nu
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers
+  }).catch(err => {
+    console.error(`API Request Failed: ${path}`, err);
+    throw err;
   });
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    const errorMsg = payload?.error?.message ?? "Request failed";
+    console.error(`API Error ${response.status}: ${path}`, errorMsg, payload);
     throw new ApiError(
       response.status,
-      payload?.error?.message ?? "Request failed",
+      errorMsg,
       payload?.error?.code
     );
   }
