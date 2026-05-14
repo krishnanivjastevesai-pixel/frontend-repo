@@ -12,13 +12,13 @@ import {
 } from "react";
 import { ArrowLeft, Loader2, MessageSquareText } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useSocket } from "@/components/chat/SocketProvider";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageComposer } from "@/components/chat/MessageComposer";
 import { ApiError, createMessage, getMessages } from "@/lib/api";
 import type { Conversation, Message } from "@/types/api";
 
 const NEAR_BOTTOM_PX = 160;
-const REFRESH_MS = 1500;
 
 function snapshotMessages(items: Message[]) {
   if (items.length === 0) return "0:";
@@ -59,13 +59,14 @@ export function ChatView({
   onMessageSent: () => void;
 }) {
   const { profile } = useAuth();
+  const { socket, isConnected } = useSocket();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
 
-  const typingCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
   const sendingRef = useRef(false);
@@ -106,7 +107,7 @@ export function ChatView({
 
       try {
         const response = await getMessages(cid, undefined, {
-          bypassCache: mode === "refresh"
+          bypassCache: true
         });
 
         if (activeConversationIdRef.current !== cid) {
@@ -134,32 +135,6 @@ export function ChatView({
     },
     [conversationId]
   );
-
-  const checkTypingStatus = useCallback(() => {
-    const otherUserId = conversation?.otherUser.username;
-    if (!otherUserId) return;
-
-    const typingKey = `ephemeral-chat:typing:${otherUserId}`;
-    const typingData = localStorage.getItem(typingKey);
-
-    if (typingData) {
-      const { timestamp, isTyping } = JSON.parse(typingData) as {
-        timestamp: number;
-        isTyping: boolean;
-      };
-      const now = Date.now();
-      const timeDiff = now - timestamp;
-
-      if (isTyping && timeDiff < 3000) {
-        setOtherUserTyping(true);
-      } else {
-        setOtherUserTyping(false);
-        localStorage.removeItem(typingKey);
-      }
-    } else {
-      setOtherUserTyping(false);
-    }
-  }, [conversation?.otherUser.username]);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -221,27 +196,72 @@ export function ChatView({
 
     void loadMessages("initial");
 
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "hidden") {
-        return;
-      }
-      void loadMessages("refresh");
-    }, REFRESH_MS);
+    if (!socket) return;
 
-    typingCheckRef.current = setInterval(checkTypingStatus, 1000);
+    // Join conversation room
+    socket.emit("conversation:join", conversationId);
+
+    // Listen for new messages
+    socket.on("message:new", (newMessage) => {
+      setMessages((current) => {
+        // 1. If message already exists (by ID), don't add it again
+        if (current.some((m) => m.id === newMessage.id)) return current;
+        
+        // 2. If it's from us, try to find an optimistic message to replace
+        if (newMessage.senderId === profile?.id) {
+          const optimisticIdx = current.findIndex(
+            m => m.status === "sending" && m.text === newMessage.text && m.id.startsWith("temp-")
+          );
+          
+          if (optimisticIdx !== -1) {
+            const updated = [...current];
+            updated[optimisticIdx] = { ...newMessage as Message, status: "delivered" };
+            return updated;
+          }
+        }
+        
+        // 3. Otherwise, just append it
+        return [...current, newMessage as Message];
+      });
+      nearBottomRef.current = true;
+    });
+
+    // Listen for typing events
+    socket.on("typing:start", (data) => {
+      if (data.userId !== profile?.id) {
+        setOtherUserTyping(true);
+      }
+    });
+
+    socket.on("typing:stop", (data) => {
+      if (data.userId !== profile?.id) {
+        setOtherUserTyping(false);
+      }
+    });
+
+    // Listen for user presence
+    socket.on("user:online", (data) => {
+      if (data.userId !== profile?.id) {
+        setIsOtherUserOnline(true);
+      }
+    });
+
+    socket.on("user:offline", (data) => {
+      if (data.userId !== profile?.id) {
+        setIsOtherUserOnline(false);
+        setOtherUserTyping(false);
+      }
+    });
 
     return () => {
-      window.clearInterval(interval);
-      if (typingCheckRef.current) {
-        clearInterval(typingCheckRef.current);
-      }
-
-      const currentUserId = profile?.username;
-      if (currentUserId) {
-        localStorage.removeItem(`ephemeral-chat:typing:${currentUserId}`);
-      }
+      socket.emit("conversation:leave", conversationId);
+      socket.off("message:new");
+      socket.off("typing:start");
+      socket.off("typing:stop");
+      socket.off("user:online");
+      socket.off("user:offline");
     };
-  }, [conversationId, loadMessages, checkTypingStatus, profile?.username]);
+  }, [conversationId, loadMessages, socket, profile?.id]);
 
   async function handleSend(input: { text: string; image: File | null }) {
     setSending(true);
@@ -285,30 +305,26 @@ export function ChatView({
     }
   }
 
+  const isTypingRef = useRef(false);
+
   const handleTyping = useCallback(
     (isTyping: boolean) => {
-      const currentUserId = profile?.username;
-      if (!currentUserId) return;
+      if (!socket) return;
+      if (isTyping === isTypingRef.current) return;
 
-      const typingKey = `ephemeral-chat:typing:${currentUserId}`;
+      isTypingRef.current = isTyping;
 
       if (isTyping) {
-        localStorage.setItem(
-          typingKey,
-          JSON.stringify({
-            isTyping: true,
-            timestamp: Date.now()
-          })
-        );
+        socket.emit("typing:start", { conversationId });
       } else {
-        localStorage.removeItem(typingKey);
+        socket.emit("typing:stop", { conversationId });
       }
     },
-    [profile?.username]
+    [socket, conversationId]
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface/70 px-3 backdrop-blur-md sm:h-16 sm:px-4">
         <Link
           className="grid h-10 w-10 place-items-center rounded-2xl border border-border bg-surface text-ink shadow-soft transition-all hover:bg-mist active:scale-90 md:hidden"
@@ -323,9 +339,9 @@ export function ChatView({
           <h1 className="flex items-center gap-2 truncate text-base font-bold text-ink sm:text-lg">
             {title}
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-fern animate-pulse" />
+              <span className={`h-2 w-2 rounded-full ${isOtherUserOnline ? 'bg-fern animate-pulse' : 'bg-muted/30'}`} />
               <span className="hidden text-xs font-medium text-muted sm:inline">
-                Online
+                {isOtherUserOnline ? 'Online' : 'Offline'}
               </span>
             </span>
           </h1>
@@ -336,6 +352,9 @@ export function ChatView({
       <div
         ref={scrollAreaRef}
         className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden scroll-smooth px-2 py-4 sm:px-4"
+        style={{
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)"
+        }}
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
           {loading ? (
@@ -374,10 +393,9 @@ export function ChatView({
       </div>
 
       <div
-        className="shrink-0 border-t border-border bg-surface/50 backdrop-blur-md md:pb-3"
+        className="fixed bottom-0 left-0 right-0 z-10 shrink-0 border-t border-border bg-surface/95 backdrop-blur-md md:relative md:bg-surface/50"
         style={{
-          paddingBottom:
-            "max(env(safe-area-inset-bottom, 0px), var(--keyboard-visual-offset, 0px))"
+          paddingBottom: "max(env(safe-area-inset-bottom, 0px), var(--keyboard-visual-offset, 0px))"
         }}
       >
         <div className="mx-auto w-full max-w-3xl">

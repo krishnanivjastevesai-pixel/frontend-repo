@@ -1,8 +1,17 @@
 "use client";
 
-// Stub for compatibility with existing tests
-// This is no longer used in the Krishna/Sibbu direct chat system
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  }
+});
 
 export function getSupabaseClient() {
-  throw new Error("Supabase client is no longer used in the Krishna/Sibbu direct chat system");
+  return supabase;
 }
