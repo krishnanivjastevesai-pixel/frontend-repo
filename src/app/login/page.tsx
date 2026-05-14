@@ -72,8 +72,7 @@ function LoginForm() {
 
       signIn(selectedName);
       console.log("Sign in state updated, redirecting to:", nextUrl);
-      
-      // The useEffect will handle redirection when profile state updates
+      router.replace(nextUrl);
     } catch (err) {
       console.error("Login process error:", err);
       setError("An unexpected error occurred during login. Check console for details.");

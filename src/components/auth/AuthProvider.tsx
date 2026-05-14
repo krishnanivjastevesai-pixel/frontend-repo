@@ -45,24 +45,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Check for existing session (only valid for current browser session)
+    // Check for existing session
     const storedUsername = sessionStorage.getItem("ephemeral-chat:username");
-    const loginTime = sessionStorage.getItem("ephemeral-chat:login-time");
     
-    // Optional: Add session timeout (e.g., 1 hour)
-    if (storedUsername && loginTime && (storedUsername === "krishna" || storedUsername === "sibbu")) {
-      const loginDate = new Date(loginTime);
-      const now = new Date();
-      const sessionDuration = now.getTime() - loginDate.getTime();
-      const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
-      
-      if (sessionDuration < oneHour) {
-        setProfile(PROFILES[storedUsername]);
-      } else {
-        // Session expired, clear it
-        sessionStorage.removeItem("ephemeral-chat:username");
-        sessionStorage.removeItem("ephemeral-chat:login-time");
-      }
+    if (storedUsername && (storedUsername === "krishna" || storedUsername === "sibbu")) {
+      console.log("[Auth] Restoring session for:", storedUsername);
+      setProfile(PROFILES[storedUsername]);
+    } else {
+      console.log("[Auth] No active session found");
     }
     setLoading(false);
   }, []);

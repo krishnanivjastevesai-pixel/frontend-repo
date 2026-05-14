@@ -15,14 +15,19 @@ export default function ChatPage() {
 
   useEffect(() => {
     async function redirectToSingleChat() {
-      if (!profile) return;
+      if (!profile) {
+        console.log("[ChatPage] No profile, skipping redirect");
+        return;
+      }
 
+      console.log("[ChatPage] Profile found, fetching conversation...");
       try {
         const response = await getSingleConversation();
+        console.log("[ChatPage] Redirecting to conversation:", response.conversation.id);
         // Auto-redirect to the single conversation
         router.replace(`/chat/${response.conversation.id}`);
       } catch (caught) {
-        console.error("Failed to load conversation:", caught);
+        console.error("[ChatPage] Failed to load conversation:", caught);
         setError(caught instanceof ApiError ? caught.message : "Unable to load chat");
       }
     }
