@@ -43,31 +43,42 @@ function LoginForm() {
     }
 
     setIsSubmitting(true);
+    console.log("Login attempt for:", selectedName);
 
-    // Validate password
-    const correctPassword = USER_PASSWORDS[selectedName];
-    if (password !== correctPassword) {
-      setError("Wrong Password");
-      // Store failed attempt in localStorage
-      const attempts = JSON.parse(localStorage.getItem("ephemeral-chat:failed-attempts") || "[]");
-      attempts.push({
+    try {
+      // Validate password
+      const correctPassword = USER_PASSWORDS[selectedName];
+      if (password !== correctPassword) {
+        console.warn("Wrong password entered for:", selectedName);
+        setError("Wrong Password");
+        // Store failed attempt in localStorage
+        const attempts = JSON.parse(localStorage.getItem("ephemeral-chat:failed-attempts") || "[]");
+        attempts.push({
+          username: selectedName,
+          timestamp: new Date().toISOString(),
+          enteredPassword: password
+        });
+        localStorage.setItem("ephemeral-chat:failed-attempts", JSON.stringify(attempts));
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log("Password correct, signing in...");
+      // Store successful login attempt
+      localStorage.setItem("ephemeral-chat:last-login", JSON.stringify({
         username: selectedName,
-        timestamp: new Date().toISOString(),
-        enteredPassword: password
-      });
-      localStorage.setItem("ephemeral-chat:failed-attempts", JSON.stringify(attempts));
+        timestamp: new Date().toISOString()
+      }));
+
+      signIn(selectedName);
+      console.log("Sign in state updated, redirecting to:", nextUrl);
+      
+      // The useEffect will handle redirection when profile state updates
+    } catch (err) {
+      console.error("Login process error:", err);
+      setError("An unexpected error occurred during login. Check console for details.");
       setIsSubmitting(false);
-      return;
     }
-
-    // Store successful login attempt
-    localStorage.setItem("ephemeral-chat:last-login", JSON.stringify({
-      username: selectedName,
-      timestamp: new Date().toISOString()
-    }));
-
-    signIn(selectedName);
-    router.replace(nextUrl);
   }
 
   if (profile) {
