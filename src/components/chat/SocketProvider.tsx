@@ -28,11 +28,21 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       const newSocket = socketService.connect(profile.username);
       setSocket(newSocket);
 
-      const onConnect = () => setIsConnected(true);
-      const onDisconnect = () => setIsConnected(false);
+      const onConnect = () => {
+        console.log("[Socket] Connected successfully");
+        setIsConnected(true);
+      };
+      const onDisconnect = (reason: string) => {
+        console.warn("[Socket] Disconnected:", reason);
+        setIsConnected(false);
+      };
+      const onConnectError = (error: Error) => {
+        console.error("[Socket] Connection error:", error.message);
+      };
 
       newSocket.on("connect", onConnect);
       newSocket.on("disconnect", onDisconnect);
+      newSocket.on("connect_error", onConnectError);
 
       if (newSocket.connected) {
         setIsConnected(true);
@@ -41,6 +51,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       return () => {
         newSocket.off("connect", onConnect);
         newSocket.off("disconnect", onDisconnect);
+        newSocket.off("connect_error", onConnectError);
         socketService.disconnect();
       };
     } else {

@@ -3,13 +3,15 @@
 import { io, Socket } from "socket.io-client";
 import type { ClientToServerEvents, ServerToClientEvents } from "@/types/socket";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const SOCKET_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, '');
 
 class SocketService {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
   connect(username: string) {
     if (this.socket?.connected) return this.socket;
+
+    console.log(`Connecting to Socket.IO at: ${SOCKET_URL}`);
 
     this.socket = io(SOCKET_URL, {
       auth: {

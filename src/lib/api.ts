@@ -67,34 +67,51 @@ async function apiRequest<T>(path: string, init: RequestInit = {}, cacheTtl?: nu
     if (cached) return cached;
   }
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    ...init,
-    headers
-  }).catch(err => {
-    console.error(`API Request Failed: ${path}`, err);
+  const url = `${apiBaseUrl.replace(/\/$/, '')}${path}`;
+  
+  // Add a timeout to prevent infinite loading states in production
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+  try {
+    console.log(`[API] Fetching: ${url}`);
+    const response = await fetch(url, {
+      ...init,
+      headers,
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const errorMsg = payload?.error?.message ?? `Request failed with status ${response.status}`;
+      console.error(`[API] Error ${response.status}: ${url}`, errorMsg);
+      throw new ApiError(
+        response.status,
+        errorMsg,
+        payload?.error?.code
+      );
+    }
+
+    const data = await response.json() as T;
+
+    // Cache successful GET requests
+    if ((!init.method || init.method === 'GET') && cacheTtl) {
+      const cacheKey = getCacheKey(path, init.body ? JSON.parse(init.body as string) : undefined);
+      setCache(cacheKey, data, cacheTtl);
+    }
+
+    return data;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      console.error(`[API] Timeout: ${url} (15s)`);
+      throw new ApiError(504, "Server is taking too long to respond. It might be waking up from sleep.", "timeout");
+    }
+    console.error(`[API] Request Failed: ${url}`, err);
     throw err;
-  });
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    const errorMsg = payload?.error?.message ?? "Request failed";
-    console.error(`API Error ${response.status}: ${path}`, errorMsg, payload);
-    throw new ApiError(
-      response.status,
-      errorMsg,
-      payload?.error?.code
-    );
   }
-
-  const data = await response.json() as T;
-
-  // Cache successful GET requests
-  if ((!init.method || init.method === 'GET') && cacheTtl) {
-    const cacheKey = getCacheKey(path, init.body ? JSON.parse(init.body as string) : undefined);
-    setCache(cacheKey, data, cacheTtl);
-  }
-
-  return data;
 }
 
 export async function getMe(): Promise<{ profile: Profile }> {

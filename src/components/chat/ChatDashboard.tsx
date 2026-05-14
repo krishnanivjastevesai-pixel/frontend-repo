@@ -66,8 +66,21 @@ export function ChatDashboard({ activeConversationId }: { activeConversationId?:
       <RequireAuth>
         <AppShell>
           <div className="flex min-h-0 w-full flex-1 items-center justify-center bg-surface">
-            <div className="text-center p-6 rounded-2xl bg-coral/10 border border-coral/20">
-              <p className="text-coral font-medium">{error}</p>
+            <div className="text-center p-8 rounded-3xl bg-coral/5 border border-coral/10 max-w-md mx-4">
+              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-coral/10 text-coral">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <p className="text-coral font-bold text-lg mb-2">Connection Issue</p>
+              <p className="text-muted text-sm mb-6 leading-relaxed">
+                {error}. <br/>
+                If this persists, the server might be waking up. Please try again in a few seconds.
+              </p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="w-full py-3 px-6 rounded-2xl bg-coral text-white font-bold shadow-soft hover:bg-coral-dark transition-all active:scale-95"
+              >
+                Retry Connection
+              </button>
             </div>
           </div>
         </AppShell>

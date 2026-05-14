@@ -198,11 +198,20 @@ export function ChatView({
 
     if (!socket) return;
 
-    // Join conversation room
-    socket.emit("conversation:join", conversationId);
+    const joinRoom = () => {
+      console.log(`[Socket] Joining room: conversation:${conversationId}`);
+      socket.emit("conversation:join", conversationId);
+    };
+
+    // Join room immediately
+    joinRoom();
+
+    // Re-join on reconnection (Critical for real-time to work after connection drops)
+    socket.on("connect", joinRoom);
 
     // Listen for new messages
     socket.on("message:new", (newMessage) => {
+      console.log("[Socket] New message received:", newMessage.id);
       setMessages((current) => {
         // 1. If message already exists (by ID), don't add it again
         if (current.some((m) => m.id === newMessage.id)) return current;
@@ -255,6 +264,7 @@ export function ChatView({
 
     return () => {
       socket.emit("conversation:leave", conversationId);
+      socket.off("connect", joinRoom);
       socket.off("message:new");
       socket.off("typing:start");
       socket.off("typing:stop");
@@ -282,6 +292,33 @@ export function ChatView({
     nearBottomRef.current = true;
 
     try {
+      if (!input.image && socket && isConnected) {
+        // Send text-only message via Socket.IO for instant delivery
+        socket.emit("message:send", {
+          conversationId,
+          text: input.text,
+          tempId: optimisticMessage.id
+        }, (response) => {
+          if (response.success) {
+            setMessages((current) =>
+              current.map((msg) =>
+                msg.id === optimisticMessage.id
+                  ? { ...msg, id: response.messageId!, status: "delivered" as const }
+                  : msg
+              )
+            );
+          } else {
+            setMessages((current) => current.filter((msg) => msg.id !== optimisticMessage.id));
+            setError(response.error || "Failed to send message");
+          }
+          setSending(false);
+        });
+        
+        // Callback handles the rest
+        return;
+      }
+
+      // Send via REST for images or if socket is disconnected
       const response = await createMessage(conversationId, input);
       setMessages((current) => {
         const mapped = current.map((msg) =>
